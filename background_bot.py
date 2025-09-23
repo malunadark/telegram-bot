@@ -1,31 +1,30 @@
 import os
-from telegram import InputMediaAnimation, InputMediaPhoto
-from telegram.ext import CommandHandler, ContextTypes, Application
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 
-ASSETS_DIR = "assets"
-GENERAL_DIR = os.path.join(ASSETS_DIR, "general")
+# 🔑 Токен берём из переменной окружения Render
+TOKEN = os.environ['TELEGRAM_TOKEN']
 
-# 📌 /background — отправляет GIF как фон
-async def background(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    gif_path = os.path.join(GENERAL_DIR, "rune.mp4")  # Имя твоего GIF
-    if not os.path.exists(gif_path):
-        await update.message.reply_text("❌ Фон не найден.")
+# Путь к видео (относительно корня проекта)
+VIDEO_PATH = "assets/general/Rune.mp4"
+
+# 📌 Команда /background — отправка видео
+async def send_background(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not os.path.exists(VIDEO_PATH):
+        await update.message.reply_text("❌ Видео не найдено!")
         return
-    
-    # Отправляем GIF
-    await update.message.reply_animation(open(gif_path, "rb"), caption="🌑 Фон загружен!")
+    with open(VIDEO_PATH, "rb") as video:
+        await update.message.reply_video(video, caption="✦ Фоновое видео Rune")
 
-# 📌 /overlay — отправляет картинку поверх фона (имитация)
-async def overlay(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Здесь можно выбирать случайное изображение из папки runes
-    runes_dir = os.path.join(ASSETS_DIR, "runes")
-    if not os.path.exists(runes_dir):
-        await update.message.reply_text("❌ Папка runes пуста или не найдена.")
-        return
-    rune = random.choice(os.listdir(runes_dir))
-    with open(os.path.join(runes_dir, rune), "rb") as photo:
-        await update.message.reply_photo(photo, caption="✦ Руна на фоне...")
+def main():
+    app = Application.builder().token(TOKEN).build()
 
-# В main() добавляем команды
-app.add_handler(CommandHandler("background", background))
-app.add_handler(CommandHandler("overlay", overlay))
+    # Команда /background
+    app.add_handler(CommandHandler("background", send_background))
+
+    print("Бот запущен! Ждём команд...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
+
