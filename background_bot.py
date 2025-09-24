@@ -2,7 +2,6 @@ import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# 🔑 Токен берём из переменной окружения
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 if not TOKEN:
     raise ValueError("❌ Токен бота не найден! Задайте переменную окружения TELEGRAM_TOKEN.")
