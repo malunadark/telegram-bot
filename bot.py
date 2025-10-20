@@ -1,77 +1,157 @@
 import os
-import random
-from telegram import Update
-from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
+import json
+import logging
+from telegram import (
+    Update,
+    InputMediaPhoto,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+    ContextTypes
+)
 
-TOKEN = os.environ["BOT_TOKEN"]
-ASSETS_DIR = "assets"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-WELCOME_TEXT = """
-𝕹𝖔𝖘𝖙𝖆𝖎 ✦ 𝕻𝖔𝖗𝖔𝖌 𝕿𝖆𝖎𝖓𝖞  
+# === Загрузка квестов ===
+with open("quests.json", "r", encoding="utf-8") as f:
+    QUESTS = json.load(f)["quests"]
 
-Добро пожаловать Придший...  
-Войдя сюда, откинув сомнения, узрев туман...  
-Стань бойцом, стань медиком, стань спасателем... 
-Кем угодно стань...
+TOKEN = os.getenv("BOT_TOKEN")
+if not TOKEN:
+    logger.error("❌ BOT_TOKEN не найден! Добавь его в Render → Environment → BOT_TOKEN")
 
-✦ Избери путь...  
-✦ войди в тайны мира  
-✦ Стань частью круга Nostai.
-"""
+# Активные квесты: user_id → quest_name
+active_quests = {}
 
-# Приветствие новых участников
-async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    for member in update.message.new_chat_members:
-        await update.message.reply_text(
-            f"🌑 Добро пожаловать, {member.mention_html()}!\n\n{WELCOME_TEXT}",
-            parse_mode="HTML"
-        )
+# Пошаговые сцены: user_id → текущий шаг
+quest_progress = {}
 
-# /start для личного чата
+# === Приветствие ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Привет! Я бот Nostai. 🌒\nНапиши /runa, /symbol или /mist, чтобы увидеть магию!"
+    user = update.effective_user
+    text = (
+        f"🌒 Привет, {user.first_name}.\n\n"
+        "Ты вошёл в мир **NOSTAI**.\n"
+        "🕯 Здесь Завеса между мирами истончена.\n\n"
+        "Чтобы начать путь, напиши одно из слов:\n"
+        "— `пепел`\n— `долина`\n— `лес`\n— `завеса`\n\n"
+        "Завеса ждёт..."
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+# === Обработка сообщений ===
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = update.message.text.lower()
+
+    # Проверяем, если игрок внутри квеста и пишет "продолжить"
+    if user_id in active_quests and text == "продолжить":
+        await continue_quest(update, context)
+        return
+
+    # Проверяем триггерные слова
+    for quest_name, quest in QUESTS.items():
+        for trigger in quest["trigger_words"]:
+            if trigger in text:
+                await send_intro(update, quest_name, quest)
+                return
+
+    await update.message.reply_text("🌫 Завеса не слышит тебя... Попробуй другое слово.")
+
+# === Отправка вступления квеста ===
+async def send_intro(update: Update, quest_name, quest):
+    keyboard = [
+        [InlineKeyboardButton("🔮 Войти", callback_data=f"accept_{quest_name}")],
+        [InlineKeyboardButton("⚖️ Отступить", callback_data="decline")]
+    ]
+    markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(quest["intro_text"], reply_markup=markup)
+
+# === Обработка кнопок ===
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+
+    if query.data.startswith("accept_"):
+        quest_name = query.data.replace("accept_", "")
+        quest = QUESTS[quest_name]
+        active_quests[user_id] = quest_name
+        quest_progress[user_id] = 0  # первый шаг
+
+        await query.message.reply_text(quest["on_accept"])
+        await send_room_intro(query, quest)
+    elif query.data == "decline":
+        await query.message.reply_text("🌫 Завеса отступает. Возможно, позже...")
+
+# === Вступление в комнату квеста ===
+async def send_room_intro(update_or_query, quest):
+    if hasattr(update_or_query, "message"):
+        chat_id = update_or_query.message.chat.id
+    else:
+        chat_id = update_or_query.message.chat.id
+
+    await update_or_query.message.reply_text(
+        f"🏕 {quest['room_name']}\n{quest['room_description']}\n\n"
+        "📜 Напиши `продолжить`, чтобы начать сцену."
     )
 
-# Остальные команды
-async def runa(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    runes_dir = os.path.join(ASSETS_DIR, "runes")
-    if not os.path.exists(runes_dir) or not os.listdir(runes_dir):
-        await update.message.reply_text("❌ Папка runes пуста или не найдена.")
-        return
-    rune_file = random.choice(os.listdir(runes_dir))
-    with open(os.path.join(runes_dir, rune_file), "rb") as photo:
-        await update.message.reply_photo(photo, caption="✦ Руна пробуждена...")
+# === Пошаговое прохождение квеста ===
+async def continue_quest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    quest_name = active_quests[user_id]
+    quest = QUESTS[quest_name]
 
-async def symbol(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    symbols_dir = os.path.join(ASSETS_DIR, "symbols")
-    if not os.path.exists(symbols_dir) or not os.listdir(symbols_dir):
-        await update.message.reply_text("❌ Папка symbols пуста или не найдена.")
-        return
-    symbol_file = random.choice(os.listdir(symbols_dir))
-    with open(os.path.join(symbols_dir, symbol_file), "rb") as photo:
-        await update.message.reply_photo(photo, caption="✦ Символ фракции проявился...")
+    # Получаем список артов
+    arts = [f for f in os.listdir(quest["folder"]) if f.lower().endswith((".jpg", ".png", ".gif"))]
+    arts.sort()  # последовательность по имени
 
-async def mist(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    arts_dir = os.path.join(ASSETS_DIR, "arts")
-    if not os.path.exists(arts_dir) or not os.listdir(arts_dir):
-        await update.message.reply_text("❌ Папка arts пуста или не найдена.")
-        return
-    art_file = random.choice(os.listdir(arts_dir))
-    with open(os.path.join(arts_dir, art_file), "rb") as photo:
-        await update.message.reply_photo(photo, caption="✦ Туман скрывает истину...")
+    step = quest_progress[user_id]
 
+    if step < len(arts):
+        art_path = os.path.join(quest["folder"], arts[step])
+        with open(art_path, "rb") as f:
+            await update.message.reply_photo(f)
+
+        # Можно добавить текст для каждого шага (пока используем intro_text)
+        await update.message.reply_text(f"*Сцена {step + 1}:* {quest['intro_text']}", parse_mode="Markdown")
+        quest_progress[user_id] += 1
+    else:
+        await update.message.reply_text("✨ Квест завершён. Ты можешь начать снова, написав ключевое слово.")
+        del active_quests[user_id]
+        del quest_progress[user_id]
+
+# === Проверка активных квестов ===
+async def rooms(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id in active_quests:
+        quest_name = active_quests[user_id]
+        quest = QUESTS[quest_name]
+        await update.message.reply_text(
+            f"🔮 Ты находишься в квесте: *{quest_name}*\n"
+            f"📜 Комната: {quest['room_name']}",
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text("🌒 Ты пока не в Завесе... Напиши одно из слов: пепел, лес, долина, завеса.")
+
+# === Запуск бота ===
 def main():
-    app = Application.builder().token(TOKEN).build()
+    app = ApplicationBuilder().token(TOKEN).build()
 
-    # Обработчики
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
-    app.add_handler(CommandHandler("runa", runa))
-    app.add_handler(CommandHandler("symbol", symbol))
-    app.add_handler(CommandHandler("mist", mist))
+    app.add_handler(CommandHandler("rooms", rooms))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(handle_button))
 
-    print("Бот запущен! Ждём команд и новых участников...")
+    logger.info("🚀 Бот запущен и готов.")
     app.run_polling()
 
 if __name__ == "__main__":
