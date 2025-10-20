@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 
 # 🔑 Токен бота берём из переменной окружения Render или .env
-TOKEN = os.environ['8296279646:AAG1OrvQlbQgri3WZwiivQ0ylHYrECxHLBY']
+TOKEN = os.environ["BOT_TOKEN"]
 
 # Папка с ассетами
 ASSETS_DIR = "assets"
@@ -22,7 +22,6 @@ WELCOME_TEXT = """
 ✦ Стань частью круга Nostai.
 """
 
-# 📌 Приветствие новых участников
 async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for member in update.message.new_chat_members:
         await update.message.reply_text(
@@ -30,7 +29,6 @@ async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-# 📌 /runa — случайная руна
 async def runa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     runes_dir = os.path.join(ASSETS_DIR, "runes")
     if not os.path.exists(runes_dir) or not os.listdir(runes_dir):
@@ -40,7 +38,6 @@ async def runa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with open(os.path.join(runes_dir, rune_file), "rb") as photo:
         await update.message.reply_photo(photo, caption="✦ Руна пробуждена...")
 
-# 📌 /symbol — символ фракции
 async def symbol(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbols_dir = os.path.join(ASSETS_DIR, "symbols")
     if not os.path.exists(symbols_dir) or not os.listdir(symbols_dir):
@@ -50,7 +47,6 @@ async def symbol(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with open(os.path.join(symbols_dir, symbol_file), "rb") as photo:
         await update.message.reply_photo(photo, caption="✦ Символ фракции проявился...")
 
-# 📌 /mist — туман
 async def mist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     arts_dir = os.path.join(ASSETS_DIR, "arts")
     if not os.path.exists(arts_dir) or not os.listdir(arts_dir):
@@ -62,15 +58,10 @@ async def mist(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = Application.builder().token(TOKEN).build()
-
-    # Обработчик новых участников
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
-
-    # Команды оформления
     app.add_handler(CommandHandler("runa", runa))
     app.add_handler(CommandHandler("symbol", symbol))
     app.add_handler(CommandHandler("mist", mist))
-
     print("Бот запущен! Ждём новых участников и команд...")
     app.run_polling()
 
