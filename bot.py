@@ -1,157 +1,131 @@
+from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder, MessageHandler, filters, CallbackContext,
+    CallbackQueryHandler, CommandHandler
+)
 import os
 import json
-import logging
-from telegram import (
-    Update,
-    InputMediaPhoto,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup
-)
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    filters,
-    ContextTypes
-)
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# 🔸 Токен бота
+TOKEN = "8296279646:AAG1OrvQlbQgri3WZwiivQ0ylHYrECxHLBY"  # <- вставь свой токен
 
-# === Загрузка квестов ===
-with open("quests.json", "r", encoding="utf-8") as f:
-    QUESTS = json.load(f)["quests"]
+# 🔹 Папка с артом
+ARTS_DIR = "assets"
 
-TOKEN = os.getenv("BOT_TOKEN")
-if not TOKEN:
-    logger.error("❌ BOT_TOKEN не найден! Добавь его в Render → Environment → BOT_TOKEN")
+# 🔸 Квесты
+QUESTS = {
+    "светлая долина": os.path.join(ARTS_DIR, "Light valley"),
+    "тёмный лес": os.path.join(ARTS_DIR, "Темный лес"),
+    "испытание завесы": os.path.join(ARTS_DIR, "The test of the veil")
+}
 
-# Активные квесты: user_id → quest_name
-active_quests = {}
+# 🔹 Руны
+RUNES_DIR = os.path.join(ARTS_DIR, "runy")
 
-# Пошаговые сцены: user_id → текущий шаг
-quest_progress = {}
+# === Получение файлов из папки квеста
+def get_arts(quest_name):
+    path = QUESTS.get(quest_name, "")
+    if not os.path.exists(path):
+        return []
+    return [os.path.join(path, f) for f in os.listdir(path)
+            if f.lower().endswith((".png", ".jpg", ".gif", ".webp"))]
 
-# === Приветствие ===
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    text = (
-        f"🌒 Привет, {user.first_name}.\n\n"
-        "Ты вошёл в мир **NOSTAI**.\n"
-        "🕯 Здесь Завеса между мирами истончена.\n\n"
-        "Чтобы начать путь, напиши одно из слов:\n"
-        "— `пепел`\n— `долина`\n— `лес`\n— `завеса`\n\n"
-        "Завеса ждёт..."
-    )
-    await update.message.reply_text(text, parse_mode="Markdown")
+# === Получение файлов рун
+def get_runes():
+    if not os.path.exists(RUNES_DIR):
+        return []
+    return [os.path.join(RUNES_DIR, f) for f in os.listdir(RUNES_DIR)
+            if f.lower().endswith((".png", ".jpg", ".gif", ".webp"))]
 
-# === Обработка сообщений ===
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    text = update.message.text.lower()
-
-    # Проверяем, если игрок внутри квеста и пишет "продолжить"
-    if user_id in active_quests and text == "продолжить":
-        await continue_quest(update, context)
-        return
-
-    # Проверяем триггерные слова
-    for quest_name, quest in QUESTS.items():
-        for trigger in quest["trigger_words"]:
-            if trigger in text:
-                await send_intro(update, quest_name, quest)
-                return
-
-    await update.message.reply_text("🌫 Завеса не слышит тебя... Попробуй другое слово.")
-
-# === Отправка вступления квеста ===
-async def send_intro(update: Update, quest_name, quest):
+# === Приветствие
+async def start(update: Update, context: CallbackContext):
     keyboard = [
-        [InlineKeyboardButton("🔮 Войти", callback_data=f"accept_{quest_name}")],
-        [InlineKeyboardButton("⚖️ Отступить", callback_data="decline")]
+        [InlineKeyboardButton("🌞 Светлая Долина", callback_data="quest_light")],
+        [InlineKeyboardButton("🌲 Тёмный Лес", callback_data="quest_dark")],
+        [InlineKeyboardButton("⚜ Испытание Завесы", callback_data="quest_veil")]
     ]
-    markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(quest["intro_text"], reply_markup=markup)
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "✨ Добро пожаловать в мир NOSTAI!\nВыбери свой путь:",
+        reply_markup=reply_markup
+    )
 
-# === Обработка кнопок ===
-async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# === Обработка кнопок приветствия
+async def button_handler(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
 
-    if query.data.startswith("accept_"):
-        quest_name = query.data.replace("accept_", "")
-        quest = QUESTS[quest_name]
-        active_quests[user_id] = quest_name
-        quest_progress[user_id] = 0  # первый шаг
-
-        await query.message.reply_text(quest["on_accept"])
-        await send_room_intro(query, quest)
-    elif query.data == "decline":
-        await query.message.reply_text("🌫 Завеса отступает. Возможно, позже...")
-
-# === Вступление в комнату квеста ===
-async def send_room_intro(update_or_query, quest):
-    if hasattr(update_or_query, "message"):
-        chat_id = update_or_query.message.chat.id
-    else:
-        chat_id = update_or_query.message.chat.id
-
-    await update_or_query.message.reply_text(
-        f"🏕 {quest['room_name']}\n{quest['room_description']}\n\n"
-        "📜 Напиши `продолжить`, чтобы начать сцену."
-    )
-
-# === Пошаговое прохождение квеста ===
-async def continue_quest(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    quest_name = active_quests[user_id]
-    quest = QUESTS[quest_name]
-
-    # Получаем список артов
-    arts = [f for f in os.listdir(quest["folder"]) if f.lower().endswith((".jpg", ".png", ".gif"))]
-    arts.sort()  # последовательность по имени
-
-    step = quest_progress[user_id]
-
-    if step < len(arts):
-        art_path = os.path.join(quest["folder"], arts[step])
-        with open(art_path, "rb") as f:
-            await update.message.reply_photo(f)
-
-        # Можно добавить текст для каждого шага (пока используем intro_text)
-        await update.message.reply_text(f"*Сцена {step + 1}:* {quest['intro_text']}", parse_mode="Markdown")
-        quest_progress[user_id] += 1
-    else:
-        await update.message.reply_text("✨ Квест завершён. Ты можешь начать снова, написав ключевое слово.")
-        del active_quests[user_id]
-        del quest_progress[user_id]
-
-# === Проверка активных квестов ===
-async def rooms(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id in active_quests:
-        quest_name = active_quests[user_id]
-        quest = QUESTS[quest_name]
-        await update.message.reply_text(
-            f"🔮 Ты находишься в квесте: *{quest_name}*\n"
-            f"📜 Комната: {quest['room_name']}",
-            parse_mode="Markdown"
+    if query.data == "quest_light":
+        await start_quest(query, context, "светлая долина")
+    elif query.data == "quest_dark":
+        await start_quest(query, context, "тёмный лес")
+    elif query.data == "quest_veil":
+        # Фракционный квест с подтверждением
+        keyboard = [
+            [InlineKeyboardButton("🔮 Войти в Завесу", callback_data="enter_veil")],
+            [InlineKeyboardButton("⚖️ Отступить", callback_data="decline_veil")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            "🌒 Завеса шевелится...\n🕯 Нить реальности истончается...\nТы можешь:",
+            reply_markup=reply_markup
         )
-    else:
-        await update.message.reply_text("🌒 Ты пока не в Завесе... Напиши одно из слов: пепел, лес, долина, завеса.")
+    elif query.data == "enter_veil":
+        await query.edit_message_text("🕯 Завеса раскрывается... ритуал начинается...")
+        await start_quest(query, context, "испытание завесы")
+    elif query.data == "decline_veil":
+        await query.edit_message_text("⚖️ Завеса остаётся закрытой... пока что.")
 
-# === Запуск бота ===
+# === Запуск квеста
+async def start_quest(update_or_query, context: CallbackContext, quest_name):
+    if hasattr(update_or_query, "message"):
+        chat = update_or_query.effective_chat
+    else:
+        chat = update_or_query.message.chat
+
+    # Создаём отдельную комнату/топик (если поддерживается)
+    try:
+        thread = await context.bot.create_forum_topic(chat_id=chat.id, name=f"🌀 {quest_name.title()}")
+        thread_id = thread.message_thread_id
+    except Exception:
+        thread_id = None
+
+    # Отправка артов квеста
+    arts = get_arts(quest_name)
+    if arts:
+        media_group = [InputMediaPhoto(open(a, "rb")) for a in arts]
+        if thread_id:
+            await context.bot.send_media_group(chat_id=chat.id, media=media_group, message_thread_id=thread_id)
+        else:
+            await context.bot.send_media_group(chat_id=chat.id, media=media_group)
+
+    # Отправка текста-завязки
+    if quest_name == "светлая долина":
+        text = "☀️ Ты входишь в долину света. Воздух пахнет пеплом и мёдом, но под кожей чувствуешь тревогу..."
+    elif quest_name == "тёмный лес":
+        text = "🌑 В лесу темно, как в утробе Земли. Ветви словно когти, а дыхание становится тяжелее..."
+    else:
+        text = "🕯 Завеса зовёт... фракции вступают в ритуал, и реальность колеблется."
+
+    await context.bot.send_message(chat_id=chat.id, text=text, message_thread_id=thread_id)
+
+    # Отправка рун
+    runes = get_runes()
+    if runes:
+        media_group = [InputMediaPhoto(open(r, "rb")) for r in runes]
+        await context.bot.send_media_group(chat_id=chat.id, media=media_group, message_thread_id=thread_id)
+
+# === Основная функция
 def main():
+    print("⚡ Бот запускается...")
     app = ApplicationBuilder().token(TOKEN).build()
 
+    # Команды
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("rooms", rooms))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(CallbackQueryHandler(handle_button))
+    # Обработка кнопок
+    app.add_handler(CallbackQueryHandler(button_handler))
 
-    logger.info("🚀 Бот запущен и готов.")
+    print("✅ Бот запущен! Ждём сообщений...")
     app.run_polling()
 
 if __name__ == "__main__":
