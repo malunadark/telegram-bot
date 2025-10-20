@@ -6,9 +6,8 @@ from telegram.ext import (
 import os
 import json
 
-# 🔸 Токен бота
-TOKEN = "8296279646:AAG1OrvQlbQgri3WZwiivQ0ylHYrECxHLBY"  # <- вставь свой токен
-
+# 🔸 Токен бота берём из переменной окружения
+TOKEN = os.environ.get("TOKEN")  # ← В Render создаём ENV с именем TOKEN и значением токена
 # 🔹 Папка с артом
 ARTS_DIR = "assets"
 
@@ -130,3 +129,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
