@@ -6,13 +6,13 @@ from telegram.ext import (
 import os
 import json
 
-# 🔸 Токен бота (замени на свой токен)
-TOKEN = "BOT_TOKEN"
+# 🔸 Токен бота
+TOKEN = "ВАШ_ТОКЕН_ОТ_BOTFATHER"  # <- вставь реальный токен
 
-# 🔹 Путь к папке с артами
+# 🔹 Папка с ассетами
 ARTS_DIR = "assets"
 
-# 🔸 Загружаем квесты из JSON
+# 🔸 Загружаем квесты
 with open("quests.json", encoding="utf-8") as f:
     QUESTS_DATA = json.load(f)["quests"]
 
@@ -74,7 +74,7 @@ async def start_quest(update_or_query, context: CallbackContext, quest_name):
 
     quest = QUESTS_DATA[quest_name]
 
-    # Создаём комнату/топик (если поддерживается)
+    # Создаём топик/комнату (для форумов, если поддерживается)
     try:
         thread = await context.bot.create_forum_topic(
             chat_id=chat_id, name=quest["room_name"]
@@ -83,16 +83,20 @@ async def start_quest(update_or_query, context: CallbackContext, quest_name):
     except Exception:
         thread_id = None
 
-    # Отправка артов
+    # Получаем арты
     arts = get_arts(quest_name)
-    media_group = [InputMediaPhoto(open(a, "rb")) for a in arts]
-    if media_group:
-        if thread_id:
-            await context.bot.send_media_group(chat_id=chat_id, media=media_group, message_thread_id=thread_id)
-        else:
-            await context.bot.send_media_group(chat_id=chat_id, media=media_group)
+    # Разбиваем на группы по 10
+    for i in range(0, len(arts), 10):
+        media_group = []
+        for a in arts[i:i+10]:
+            media_group.append(InputMediaPhoto(open(a, "rb")))
+        if media_group:
+            if thread_id:
+                await context.bot.send_media_group(chat_id=chat_id, media=media_group, message_thread_id=thread_id)
+            else:
+                await context.bot.send_media_group(chat_id=chat_id, media=media_group)
 
-    # Текстовая завязка
+    # Отправляем текстовую завязку
     intro_text = quest.get("intro_text", "Квест начинается...")
     await context.bot.send_message(chat_id=chat_id, text=intro_text, message_thread_id=thread_id)
 
@@ -109,5 +113,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
