@@ -1,4 +1,4 @@
-python-telegram-bot~=22.5
+python-telegram-bot~=25.2
 python-dotenv~=1.1.1
 certifi~=2025.10.5
 httpx~=0.28.1
@@ -13,6 +13,7 @@ python-dateutil~=2.8.2
 typing_extensions~=4.9.0
 six~=1.16.0
 emoji~=2.5.0
+
 
 
 
