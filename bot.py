@@ -1,16 +1,14 @@
 import os
 import json
-from typing import List, Union
-
-from telegram import (
-    Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
-)
+from typing import List
+from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder, MessageHandler, filters, CallbackQueryHandler, ContextTypes
+    ApplicationBuilder, MessageHandler, filters, CallbackContext,
+    CallbackQueryHandler
 )
 from dotenv import load_dotenv
 
-# 🔹 Load env
+# 🔹 Загружаем переменные окружения из .env
 load_dotenv()
 TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID")
@@ -20,55 +18,37 @@ if not TOKEN:
 if ADMIN_CHAT_ID:
     ADMIN_CHAT_ID = int(ADMIN_CHAT_ID)
 
-# 🔹 Assets root
+# 🔹 Папка с ассетами
 ARTS_DIR = "assets"
 
-# 🔹 Load quests
+# 🔹 Загружаем квесты
 with open("quests.json", encoding="utf-8") as f:
     QUESTS_DATA = json.load(f).get("quests", {})
 
-# === Utilities
-
+# === Получение артов квеста
 def get_arts(quest_name: str) -> List[str]:
     folder = QUESTS_DATA.get(quest_name, {}).get("folder", "")
-    # Join with ARTS_DIR if folder is relative and not already absolute
-    path = folder if os.path.isabs(folder) else os.path.join(ARTS_DIR, folder) if folder else ""
-    if not path or not os.path.exists(path):
+    if not os.path.exists(folder):
         return []
     return [
-        os.path.join(path, f)
-        for f in sorted(os.listdir(path))
-        if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))
+        os.path.join(folder, f)
+        for f in os.listdir(folder)
+        if f.lower().endswith((".jpg", ".png", ".webp", ".gif"))
     ]
 
-def message_chat_and_thread(update: Union[Update, object]):
-    chat_id = None
-    thread_id = None
-    if isinstance(update, Update):
-        if update.effective_chat:
-            chat_id = update.effective_chat.id
-        if update.effective_message:
-            # For forum topics, Telegram attaches message_thread_id
-            thread_id = getattr(update.effective_message, "message_thread_id", None)
-    return chat_id, thread_id
-
-# === Handlers
-
-async def quest_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
+# === Обработка текстовых сообщений для запуска квестов
+async def quest_trigger(update: Update, context: CallbackContext):
     text = update.message.text.lower()
-    # Simple word-boundary matching to reduce false positives
-    words = set(w.strip(".,!?;:«»\"'()[]{}").lower() for w in text.split())
     for quest_name, quest in QUESTS_DATA.items():
-        triggers = [t.lower() for t in quest.get("trigger_words", [])]
-        if any((t in words) or (t in text) for t in triggers):
+        triggers = quest.get("trigger_words", [])
+        if any(trigger.lower() in text for trigger in triggers):
             if quest_name == "испытание завесы":
                 await send_veil_invitation(update, quest_name)
             else:
                 await start_quest(update, context, quest_name)
             break
 
+# === Приглашение в Испытание Завесы с кнопками
 async def send_veil_invitation(update: Update, quest_name: str):
     keyboard = [
         [InlineKeyboardButton("🔮 Войти в Завесу", callback_data=f"enter_{quest_name}")],
@@ -80,67 +60,49 @@ async def send_veil_invitation(update: Update, quest_name: str):
         reply_markup=reply_markup
     )
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# === Обработка нажатия на кнопки
+async def button_handler(update: Update, context: CallbackContext):
     query = update.callback_query
-    if not query or not query.data:
-        return
     await query.answer()
     data = query.data
-    # Robust split: ensure we have a delimiter
-    parts = data.split("_", 1)
-    if len(parts) != 2:
-        return
-    action, quest_name = parts[0], parts[1]
+    quest_name = data.split("_")[1]
     quest = QUESTS_DATA.get(quest_name, {})
 
-    if action == "enter":
-        await query.edit_message_text(quest.get("on_accept", "Ты вошёл в квест..."))
-        await start_quest(update, context, quest_name)
-    elif action == "decline":
+    if data.startswith("enter_"):
+        await query.edit_message_text(quest.get("on_accept", "Ты вступил в Завесу."))
+        await start_quest(query, context, quest_name)
+    elif data.startswith("decline_"):
         await query.edit_message_text(f"⚖️ {quest.get('confirmation_text', 'Отменено.')}")
 
-async def start_quest(update: Update, context: ContextTypes.DEFAULT_TYPE, quest_name: str):
-    chat_id, incoming_thread = message_chat_and_thread(update)
-    if not chat_id:
-        return
+# === Запуск квеста и отправка артов
+async def start_quest(update_or_query, context: CallbackContext, quest_name: str):
+    chat_id = (
+        update_or_query.effective_chat.id
+        if hasattr(update_or_query, "message")
+        else update_or_query.message.chat.id
+    )
 
     quest = QUESTS_DATA.get(quest_name, {})
-    thread_id = incoming_thread
 
-    # Create forum topic if possible and not already in a thread
-    if thread_id is None and quest.get("room_name"):
-        try:
-            thread = await context.bot.create_forum_topic(chat_id=chat_id, name=quest.get("room_name", quest_name))
-            thread_id = thread.message_thread_id
-        except Exception as e:
-            # Forums might be unavailable; proceed without thread
-            print(f"ℹ️ Не удалось создать топик: {e}")
+    # Создаём комнату форума (если поддерживается)
+    thread_id = None
+    try:
+        thread = await context.bot.create_forum_topic(chat_id=chat_id, name=quest.get("room_name", quest_name))
+        thread_id = thread.message_thread_id
+    except Exception:
+        pass  # Форумы могут быть отключены
 
-    # Send media groups in chunks of 10
+    # Отправка артов
     arts = get_arts(quest_name)
     for i in range(0, len(arts), 10):
-        group = []
-        files = []
-        try:
-            for a in arts[i:i+10]:
-                f = open(a, "rb")
-                files.append(f)  # keep refs to avoid GC before send
-                group.append(InputMediaPhoto(media=InputFile(f, filename=os.path.basename(a))))
-            if group:
-                await context.bot.send_media_group(chat_id=chat_id, media=group, message_thread_id=thread_id)
-        except Exception as e:
-            print(f"⚠️ Ошибка при отправке медиа-группы: {e}")
-        finally:
-            for f in files:
-                try:
-                    f.close()
-                except:
-                    pass
+        media_group = [InputMediaPhoto(open(a, "rb")) for a in arts[i:i+10]]
+        await context.bot.send_media_group(chat_id=chat_id, media=media_group, message_thread_id=thread_id)
 
-    # Intro text
+    # Сообщение-завязка
     intro_text = quest.get("intro_text", "Квест начинается...")
     await context.bot.send_message(chat_id=chat_id, text=intro_text, message_thread_id=thread_id)
 
+# === Главная функция
 def main():
     print("⚡ Бот запускается...")
     app = ApplicationBuilder().token(TOKEN).build()
@@ -149,7 +111,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
 
     print("✅ Бот запущен! Ждём сообщений...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
