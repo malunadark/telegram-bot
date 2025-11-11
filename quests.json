@@ -1,0 +1,8 @@
+{
+  "quests": {
+    "first_scene": {
+      "text": "Пример текста квеста",
+      "options": [["Вариант", "scene_fire"]]
+    }
+  }
+}
