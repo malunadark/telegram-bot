@@ -1,12 +1,10 @@
 services:
   - type: web
-    name: nostai-bot         # Имя сервиса на Render
-    env: python              # Python окружение
-    plan: free               # Бесплатный план
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py   # Если main.py в корне. Если в подпапке, например bot/main.py, укажи путь
+    name: nostai-bot
+    env: python
+    plan: starter
+    buildCommand: ""
+    startCommand: "python3 main.py"
     envVars:
-      - key: TELEGRAM_TOKEN
-        sync: false
-      - key: ADMIN_CHAT_ID
+      - key: BOT_TOKEN
         sync: false
