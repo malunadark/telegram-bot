@@ -14,10 +14,11 @@ def create_app():
     if not TOKEN:
         raise ValueError("❌ BOT_TOKEN не найден! Добавь его в Render → Environment.")
 
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = ApplicationBuilder().token(8296279646:AAG1OrvQlbQgri3WZwiivQ0ylHYrECxHLBY).build()
 
     app.add_handler(quest_handler)
     app.add_handler(welcome_handler)
     app.add_handler(topic_handler)
 
     return app
+
