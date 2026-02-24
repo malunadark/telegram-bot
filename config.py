@@ -1,6 +1,7 @@
 import os
+from dotenv import load_dotenv
 
-TOKEN = os.environ.get("BOT_TOKEN")   # Render.com → Environment Variables
-GROUP_ID = -1001234567890             # замени на свой
-QUEST_FILE = "data/quests.json"
-IMAGES_DIR = "data/images"
+load_dotenv()
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
