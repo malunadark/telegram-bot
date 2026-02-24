@@ -2,9 +2,9 @@ services:
   - type: web
     name: nostai-bot
     env: python
-    plan: starter
-    buildCommand: ""
-    startCommand: "python3 main.py"
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
     envVars:
       - key: BOT_TOKEN
-        sync: false
+        fromSecret: BOT_TOKEN
