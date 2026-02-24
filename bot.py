@@ -1,41 +1,81 @@
 import asyncio
-from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message
-from aiogram.enums import ParseMode
-from aiogram import Router
+import logging
 import os
+from datetime import datetime
+
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.filters import CommandStart
+from aiogram.types import Message
 from dotenv import load_dotenv
 
 load_dotenv()
+TOKEN = os.getenv("TOKEN")
 
-TOKEN = os.getenv("BOT_TOKEN")
+logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=TOKEN, parse_mode=ParseMode.HTML)
+bot = Bot(
+    token=TOKEN,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+)
+
 dp = Dispatcher()
-router = Router()
-dp.include_router(router)
 
 
-# 🌫 Приветствие новых участников
-@router.message(F.new_chat_members)
-async def welcome_new_member(message: Message):
-    for member in message.new_chat_members:
-        
-        # Удаляем системное сообщение "X joined the group"
-        try:
-            await message.delete()
-        except:
-            pass
+def get_greeting(full_name: str) -> str:
+    hour = datetime.now().hour
 
-        await asyncio.sleep(1.5)
-
-        await message.answer(
-            f"🌫 <b>{member.full_name}</b> Вошёл в туман Nostai.\n\n"
-            "Дым здесь гуще, чем кажется.\n"
-            "Слова — не всегда правда.\n"
-            "Выбор — только за тобой.\n\n"
+    if 5 <= hour < 12:
+        return (
+            f"🌅 <b>{full_name}</b> вошёл в рассвет Nostai.\n\n"
+            "Туман ещё держится у земли.\n"
+            "Свет осторожен.\n"
+            "День только делает первый вдох.\n\n"
             "Будь внимателен."
         )
+
+    elif 12 <= hour < 17:
+        return (
+            f"☀ <b>{full_name}</b> ступил под дневное небо Nostai.\n\n"
+            "Иллюзии становятся чётче.\n"
+            "Слова звучат громче.\n"
+            "Но правда всё ещё прячется.\n\n"
+            "Выбор — только за тобой."
+        )
+
+    elif 17 <= hour < 22:
+        return (
+            f"🌆 <b>{full_name}</b> вошёл в закат Nostai.\n\n"
+            "Тени удлиняются.\n"
+            "Шёпот становится ближе.\n"
+            "Грань между явью и дымом тонка.\n\n"
+            "Смотри глубже."
+        )
+
+    elif 22 <= hour < 24:
+        return (
+            f"🌙 <b>{full_name}</b> вступил в ночь Nostai.\n\n"
+            "Дым гуще, чем кажется.\n"
+            "Шаги звучат иначе.\n"
+            "Не всё, что видишь — существует.\n\n"
+            "Не теряй себя."
+        )
+
+    else:  # 00:00–04:59
+        return (
+            f"🌑 <b>{full_name}</b> появился в глубокой ночи Nostai.\n\n"
+            "Мир почти спит.\n"
+            "Но не всё вокруг безмолвно.\n"
+            "Некоторые двери открываются только сейчас.\n\n"
+            "Ты уверен, что готов?"
+        )
+
+
+@dp.message(CommandStart())
+async def start_handler(message: Message):
+    text = get_greeting(message.from_user.full_name)
+    await message.answer(text)
 
 
 async def main():
