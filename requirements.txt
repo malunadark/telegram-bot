@@ -1,2 +1,6 @@
+# Основные зависимости бота
 aiogram==3.1.0
 python-dotenv
+# Фиксируем pydantic до версии без проблем с Rust
+pydantic<3,>=2.1.1
+
