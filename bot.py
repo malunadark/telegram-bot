@@ -1,24 +1,19 @@
-import os
-import logging
-from telegram.ext import ApplicationBuilder
+import asyncio
+from aiogram import Bot, Dispatcher
+from config import BOT_TOKEN
+from database import connect
+from handlers import start, episode1
 
-from handlers.quests import quest_handler
-from handlers.welcome import welcome_handler
-from handlers.topics import topic_handler
+async def main():
+    await connect()
 
-logging.basicConfig(level=logging.INFO)
+    bot = Bot(token=BOT_TOKEN)
+    dp = Dispatcher()
 
-def create_app():
-    TOKEN = os.getenv("BOT_TOKEN")  # ⚡ самое важное
+    dp.include_router(start.router)
+    dp.include_router(episode1.router)
 
-    if not TOKEN:
-        raise ValueError("❌ BOT_TOKEN не найден! Добавь его в Render → Environment.")
+    await dp.start_polling(bot)
 
-    app = ApplicationBuilder().token(8296279646:AAG1OrvQlbQgri3WZwiivQ0ylHYrECxHLBY).build()
-
-    app.add_handler(quest_handler)
-    app.add_handler(welcome_handler)
-    app.add_handler(topic_handler)
-
-    return app
-
+if __name__ == "__main__":
+    asyncio.run(main())
