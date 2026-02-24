@@ -1,5 +1,0 @@
-from bot import create_app
-
-if __name__ == "__main__":
-    app = create_app()
-    app.run_polling(drop_pending_updates=True)
