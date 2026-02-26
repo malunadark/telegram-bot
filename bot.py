@@ -80,7 +80,10 @@ async def start_handler(message: Message):
 
 async def main():
     await dp.start_polling(bot)
-
+    
+from quest_engine import register_quest_handlers
+register_quest_handlers(dp)
 
 if __name__ == "__main__":
     asyncio.run(main())
+
