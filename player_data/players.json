@@ -1,1 +1,10 @@
-{}
+{
+  "123456789": {
+    "quest": "prologue",
+    "stage": "forest_gate",
+    "hp": 100,
+    "fear": 0,
+    "karma": 0,
+    "faction": null
+  }
+}
