@@ -1,29 +1,60 @@
-import asyncpg
-from config import DATABASE_URL
+import sqlite3
 
-pool = None
+DB_NAME = "nostai.db"
 
-async def connect():
-    global pool
-    pool = await asyncpg.create_pool(DATABASE_URL)
 
-async def get_user(telegram_id):
-    async with pool.acquire() as conn:
-        return await conn.fetchrow(
-            "SELECT * FROM users WHERE telegram_id=$1",
-            telegram_id
-        )
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
 
-async def create_user(telegram_id, username):
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            INSERT INTO users (telegram_id, username)
-            VALUES ($1, $2)
-        """, telegram_id, username)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS players (
+        user_id TEXT PRIMARY KEY,
+        name TEXT,
+        xp INTEGER DEFAULT 0,
+        karma INTEGER DEFAULT 0,
+        fear INTEGER DEFAULT 0,
+        awareness INTEGER DEFAULT 0,
+        stage TEXT DEFAULT 'none'
+    )
+    """)
 
-async def update_stat(telegram_id, field, value):
-    async with pool.acquire() as conn:
-        await conn.execute(
-            f"UPDATE users SET {field} = {field} + $1 WHERE telegram_id=$2",
-            value, telegram_id
-        )
+    conn.commit()
+    conn.close()
+
+
+def get_player(user_id, name):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM players WHERE user_id = ?", (str(user_id),))
+    player = cursor.fetchone()
+
+    if not player:
+        cursor.execute("""
+            INSERT INTO players (user_id, name)
+            VALUES (?, ?)
+        """, (str(user_id), name))
+        conn.commit()
+        cursor.execute("SELECT * FROM players WHERE user_id = ?", (str(user_id),))
+        player = cursor.fetchone()
+
+    conn.close()
+    return player
+
+
+def update_stat(user_id, field, value):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(f"UPDATE players SET {field} = ? WHERE user_id = ?", (value, str(user_id)))
+    conn.commit()
+    conn.close()
+
+
+def get_stat(user_id, field):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT {field} FROM players WHERE user_id = ?", (str(user_id),))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
