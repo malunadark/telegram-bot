@@ -1,10 +1,12 @@
 {
-  "123456789": {
-    "quest": "prologue",
-    "stage": "forest_gate",
-    "hp": 100,
-    "fear": 0,
-    "karma": 0,
-    "faction": null
-  }
+  "quest": "prologue",
+  "stage": "forest",
+  "hp": 100,
+  "fear": 0,
+  "karma": 0,
+  "alignment_light": 0,
+  "alignment_dark": 0,
+  "alignment_reject": 0,
+  "faction_locked": false,
+  "faction": null
 }
