@@ -84,6 +84,10 @@ async def main():
 from quest_engine import register_quest_handlers
 register_quest_handlers(dp)
 
+from control_panel import register_control
+register_control(dp)
+
 if __name__ == "__main__":
     asyncio.run(main())
+
 
