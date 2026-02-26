@@ -10,6 +10,10 @@ from aiogram.filters import CommandStart
 from aiogram.types import Message
 from dotenv import load_dotenv
 
+# 🔥 ПОДКЛЮЧАЕМ МОДУЛИ СРАЗУ
+from quest_engine import register_quest_handlers
+from control_panel import register_control
+
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
@@ -28,16 +32,16 @@ def get_greeting(full_name: str) -> str:
 
     if 5 <= hour < 12:
         return (
-            f"🌅 <b>{full_name}</b> вошёл в рассвет Nostai.\n\n"
+            f"🌅 <b>{full_name}</b> Вошёл в рассвет Nostai.\n\n"
             "Туман ещё держится у земли.\n"
             "Свет осторожен.\n"
-            "День только делает первый вдох.\n\n"
+            "Ты делаешь первый вдох.\n\n"
             "Будь внимателен."
         )
 
     elif 12 <= hour < 17:
         return (
-            f"☀ <b>{full_name}</b> ступил под дневное небо Nostai.\n\n"
+            f"☀ <b>{full_name}</b> Вступил под пасмурное небо Nostai.\n\n"
             "Иллюзии становятся чётче.\n"
             "Слова звучат громче.\n"
             "Но правда всё ещё прячется.\n\n"
@@ -46,7 +50,7 @@ def get_greeting(full_name: str) -> str:
 
     elif 17 <= hour < 22:
         return (
-            f"🌆 <b>{full_name}</b> вошёл в закат Nostai.\n\n"
+            f"🌆 <b>{full_name}</b> Вошёл в закат Nostai.\n\n"
             "Тени удлиняются.\n"
             "Шёпот становится ближе.\n"
             "Грань между явью и дымом тонка.\n\n"
@@ -55,16 +59,16 @@ def get_greeting(full_name: str) -> str:
 
     elif 22 <= hour < 24:
         return (
-            f"🌙 <b>{full_name}</b> вступил в ночь Nostai.\n\n"
+            f"🌙 <b>{full_name}</b> Вступил в ночь Nostai.\n\n"
             "Дым гуще, чем кажется.\n"
             "Шаги звучат иначе.\n"
             "Не всё, что видишь — существует.\n\n"
             "Не теряй себя."
         )
 
-    else:  # 00:00–04:59
+    else:
         return (
-            f"🌑 <b>{full_name}</b> появился в глубокой ночи Nostai.\n\n"
+            f"🌑 <b>{full_name}</b> Появился в глубокой ночи Nostai.\n\n"
             "Мир почти спит.\n"
             "Но не всё вокруг безмолвно.\n"
             "Некоторые двери открываются только сейчас.\n\n"
@@ -78,16 +82,14 @@ async def start_handler(message: Message):
     await message.answer(text)
 
 
+# 🔥 РЕГИСТРАЦИЯ МОДУЛЕЙ ПОСЛЕ СОЗДАНИЯ dp
+register_quest_handlers(dp)
+register_control(dp)
+
+
 async def main():
     await dp.start_polling(bot)
-    
-from quest_engine import register_quest_handlers
-register_quest_handlers(dp)
 
-from control_panel import register_control
-register_control(dp)
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
