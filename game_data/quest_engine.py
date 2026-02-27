@@ -28,7 +28,11 @@ def init_db():
         xp INTEGER DEFAULT 0,
         karma INTEGER DEFAULT 0,
         fear INTEGER DEFAULT 0,
-        depth INTEGER DEFAULT 0
+        depth INTEGER DEFAULT 0,
+        alignment_light INTEGER DEFAULT 0,
+        alignment_dark INTEGER DEFAULT 0,
+        alignment_reject INTEGER DEFAULT 0,
+        faction TEXT DEFAULT NULL
     )
     """)
 
@@ -78,9 +82,117 @@ def register_quest_handlers(dp):
 
     init_db()
 
+    # =========================
+    # ПРОЛОГ
+    # =========================
+
+    @dp.message(Command("prologue"))
+    async def start_prologue(message: Message):
+        get_player(message.from_user.id, message.from_user.full_name)
+
+        update(message.from_user.id, "stage", "prologue_1")
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Ответить светом", callback_data="p_signal")],
+                [InlineKeyboardButton(text="Скрыться", callback_data="p_hide")],
+                [InlineKeyboardButton(text="Уйти глубже", callback_data="p_deeper")]
+            ]
+        )
+
+        await message.answer(
+            "Ты приходишь в себя среди холодного леса.\n\n"
+            "Вдалеке вспыхивает луч.\n"
+            "Он ищет выживших.\n"
+            "Или отмечает цели.\n\n"
+            "Ты действуешь.",
+            reply_markup=keyboard
+        )
+
     # ------------------------
-    # ВХОД В ИГРУ
+    # ПРОЛОГ ЛОГИКА
     # ------------------------
+
+    @dp.callback_query(F.data.startswith("p_"))
+    async def prologue_flow(callback: CallbackQuery):
+
+        user_id = callback.from_user.id
+        stage = get(user_id, "stage")
+
+        # --- Первый выбор
+
+        if callback.data == "p_signal":
+            update(user_id, "alignment_light", get(user_id, "alignment_light") + 1)
+            update(user_id, "fear", get(user_id, "fear") + 3)
+
+        elif callback.data == "p_hide":
+            update(user_id, "alignment_reject", get(user_id, "alignment_reject") + 1)
+
+        elif callback.data == "p_deeper":
+            update(user_id, "alignment_dark", get(user_id, "alignment_dark") + 1)
+            update(user_id, "fear", get(user_id, "fear") + 5)
+
+        # Проверка фракции
+
+        light = get(user_id, "alignment_light")
+        dark = get(user_id, "alignment_dark")
+        reject = get(user_id, "alignment_reject")
+
+        faction_text = None
+
+        if light >= 3:
+            update(user_id, "faction", "Пришедшие")
+            faction_text = (
+                "Свет больше не дрожит.\n\n"
+                "Голос становится твёрдым:\n"
+                "«Мы выведем тебя».\n\n"
+                "Ты сделал выбор."
+            )
+
+        elif dark >= 3:
+            update(user_id, "faction", "Падшие")
+            faction_text = (
+                "Лес перестаёт быть враждебным.\n\n"
+                "Он принимает тебя.\n"
+                "Ты слышишь больше, чем должен."
+            )
+
+        elif reject >= 3:
+            update(user_id, "faction", "Отвергнутые")
+            faction_text = (
+                "Ни свет, ни глубина не принимают тебя полностью.\n\n"
+                "Ты будешь идти один.\n"
+                "И это твой путь."
+            )
+
+        # Если фракция выбрана — финал пролога
+
+        if faction_text:
+            update(user_id, "stage", "faction_locked")
+            await callback.message.edit_text(faction_text)
+            await callback.answer()
+            return
+
+        # Если нет — продолжаем
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Продолжить путь", callback_data="p_continue")]
+            ]
+        )
+
+        await callback.message.edit_text(
+            "Мир реагирует на твой выбор.\n\n"
+            "Но решение ещё не окончательно.\n"
+            "Ты идёшь дальше.",
+            reply_markup=keyboard
+        )
+
+        await callback.answer()
+
+    # =========================
+    # СТАРЫЙ ENTER (ОСТАВЛЕН)
+    # =========================
 
     @dp.message(Command("enter"))
     async def enter_game(message: Message):
@@ -100,113 +212,14 @@ def register_quest_handlers(dp):
             reply_markup=keyboard
         )
 
-    # ------------------------
-    # КВЕСТОВАЯ ЛОГИКА
-    # ------------------------
-
-    @dp.callback_query(F.data.startswith("q_"))
-    async def quest_flow(callback: CallbackQuery):
-
-        user_id = callback.from_user.id
-
-        if callback.data == "q_begin":
-            update(user_id, "stage", "forest")
-            update(user_id, "depth", 1)
-            update(user_id, "xp", get(user_id, "xp") + 5)
-
-            await asyncio.sleep(2)
-
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text="Идти на шёпот", callback_data="q_whisper")],
-                    [InlineKeyboardButton(text="Остаться в тишине", callback_data="q_stay")]
-                ]
-            )
-
-            await callback.message.edit_text(
-                "Ты входишь в туман.\n\n"
-                "Шёпот зовёт тебя по имени.\n"
-                "Но ты не помнишь, чтобы называл его кому-то.",
-                reply_markup=keyboard
-            )
-
-        # --- ВЕТКА 1
-
-        elif callback.data == "q_whisper":
-            update(user_id, "fear", get(user_id, "fear") + 2)
-            update(user_id, "karma", get(user_id, "karma") - 1)
-            update(user_id, "depth", get(user_id, "depth") + 1)
-
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text="Коснуться тени", callback_data="q_touch")],
-                    [InlineKeyboardButton(text="Спросить: кто ты?", callback_data="q_ask")]
-                ]
-            )
-
-            await callback.message.edit_text(
-                "Тень отделяется от земли.\n\n"
-                "Она повторяет твои движения.\n"
-                "Но с задержкой.",
-                reply_markup=keyboard
-            )
-
-        # --- ВЕТКА 2
-
-        elif callback.data == "q_stay":
-            update(user_id, "karma", get(user_id, "karma") + 1)
-            update(user_id, "depth", get(user_id, "depth") + 1)
-
-            await callback.message.edit_text(
-                "Ты остаёшься.\n\n"
-                "И понимаешь — шёпот не вокруг.\n"
-                "Он внутри тебя.\n\n"
-                "Иногда тишина страшнее."
-            )
-
-        # --- ГЛУБОКАЯ ВЕТКА
-
-        elif callback.data == "q_touch":
-            update(user_id, "stage", "dark_path")
-            update(user_id, "xp", get(user_id, "xp") + 20)
-            update(user_id, "fear", get(user_id, "fear") + 5)
-
-            await callback.message.edit_text(
-                "Ты касаешься тени.\n\n"
-                "Мир трескается.\n"
-                "Воздух становится плотным.\n\n"
-                "«Теперь ты видишь больше».\n\n"
-                "🌑 Концовка: Принятие Тьмы."
-            )
-
-        elif callback.data == "q_ask":
-            update(user_id, "stage", "awaken")
-            update(user_id, "xp", get(user_id, "xp") + 15)
-
-            await callback.message.edit_text(
-                "Ты спрашиваешь.\n\n"
-                "Ответ приходит не словами.\n\n"
-                "Ты начинаешь вспоминать то,\n"
-                "чего никогда не переживал.\n\n"
-                "🌫 Концовка: Пробуждение."
-            )
-
-        elif callback.data == "q_leave":
-            await callback.message.edit_text(
-                "Ты делаешь шаг назад.\n\n"
-                "Дверь остаётся приоткрытой.\n"
-                "Она будет ждать."
-            )
-
-        await callback.answer()
-
-    # ------------------------
+    # =========================
     # ПРОФИЛЬ
-    # ------------------------
+    # =========================
 
     @dp.message(Command("profile"))
     async def profile(message: Message):
         await message.answer(
+            f"Фракция: {get(message.from_user.id, 'faction')}\n"
             f"Глубина: {get(message.from_user.id, 'depth')}\n"
             f"XP: {get(message.from_user.id, 'xp')}\n"
             f"Карма: {get(message.from_user.id, 'karma')}\n"
