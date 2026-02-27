@@ -10,14 +10,37 @@ from aiogram.filters import CommandStart
 from aiogram.types import Message
 from dotenv import load_dotenv
 
-# 🔥 ПОДКЛЮЧАЕМ МОДУЛИ СРАЗУ
+# 🔥 Подключение модулей
 from quest_engine import register_quest_handlers
 from control_panel import register_control
+
+
+# =========================
+# ЗАГРУЗКА ENV
+# =========================
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
-logging.basicConfig(level=logging.INFO)
+if not TOKEN:
+    raise ValueError("TOKEN not found in .env file")
+
+
+# =========================
+# ЛОГИ
+# =========================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+)
+
+logger = logging.getLogger(__name__)
+
+
+# =========================
+# СОЗДАНИЕ БОТА
+# =========================
 
 bot = Bot(
     token=TOKEN,
@@ -27,12 +50,16 @@ bot = Bot(
 dp = Dispatcher()
 
 
+# =========================
+# ПРИВЕТСТВИЕ
+# =========================
+
 def get_greeting(full_name: str) -> str:
     hour = datetime.now().hour
 
     if 5 <= hour < 12:
         return (
-            f"🌅 <b>{full_name}</b> Вошёл в рассвет Nostai.\n\n"
+            f"🌅 <b>{full_name}</b> вошёл в рассвет Nostai.\n\n"
             "Туман ещё держится у земли.\n"
             "Свет осторожен.\n"
             "Ты делаешь первый вдох.\n\n"
@@ -41,7 +68,7 @@ def get_greeting(full_name: str) -> str:
 
     elif 12 <= hour < 17:
         return (
-            f"☀ <b>{full_name}</b> Вступил под пасмурное небо Nostai.\n\n"
+            f"☀ <b>{full_name}</b> вступил под пасмурное небо Nostai.\n\n"
             "Иллюзии становятся чётче.\n"
             "Слова звучат громче.\n"
             "Но правда всё ещё прячется.\n\n"
@@ -50,7 +77,7 @@ def get_greeting(full_name: str) -> str:
 
     elif 17 <= hour < 22:
         return (
-            f"🌆 <b>{full_name}</b> Вошёл в закат Nostai.\n\n"
+            f"🌆 <b>{full_name}</b> вошёл в закат Nostai.\n\n"
             "Тени удлиняются.\n"
             "Шёпот становится ближе.\n"
             "Грань между явью и дымом тонка.\n\n"
@@ -59,7 +86,7 @@ def get_greeting(full_name: str) -> str:
 
     elif 22 <= hour < 24:
         return (
-            f"🌙 <b>{full_name}</b> Вступил в ночь Nostai.\n\n"
+            f"🌙 <b>{full_name}</b> вступил в ночь Nostai.\n\n"
             "Дым гуще, чем кажется.\n"
             "Шаги звучат иначе.\n"
             "Не всё, что видишь — существует.\n\n"
@@ -68,7 +95,7 @@ def get_greeting(full_name: str) -> str:
 
     else:
         return (
-            f"🌑 <b>{full_name}</b> Появился в глубокой ночи Nostai.\n\n"
+            f"🌑 <b>{full_name}</b> появился в глубокой ночи Nostai.\n\n"
             "Мир почти спит.\n"
             "Но не всё вокруг безмолвно.\n"
             "Некоторые двери открываются только сейчас.\n\n"
@@ -79,15 +106,28 @@ def get_greeting(full_name: str) -> str:
 @dp.message(CommandStart())
 async def start_handler(message: Message):
     text = get_greeting(message.from_user.full_name)
+
+    text += "\n\n⚔ Доступные команды:\n"
+    text += "/prologue — начать историю\n"
+    text += "/enter — перейти в игру\n"
+
     await message.answer(text)
 
 
-# 🔥 РЕГИСТРАЦИЯ МОДУЛЕЙ ПОСЛЕ СОЗДАНИЯ dp
+# =========================
+# РЕГИСТРАЦИЯ МОДУЛЕЙ
+# =========================
+
 register_quest_handlers(dp)
 register_control(dp)
 
 
+# =========================
+# ЗАПУСК
+# =========================
+
 async def main():
+    logger.info("Bot started successfully.")
     await dp.start_polling(bot)
 
 
