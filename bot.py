@@ -11,7 +11,7 @@ from aiogram.types import Message
 from dotenv import load_dotenv
 
 # 🔥 Подключение модулей
-from quest_engine import register_quest_handlers
+from game_data.quest_engine import register_quest_handlers
 from control_panel import register_control
 
 
